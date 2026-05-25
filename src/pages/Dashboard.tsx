@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import {
   FaArrowDown,
   FaArrowUp,
+  FaBars,
   FaBell,
   FaBoxOpen,
   FaBullseye,
@@ -10,10 +11,12 @@ import {
   FaCog,
   FaDollarSign,
   FaExclamationTriangle,
+  FaFilter,
   FaHome,
   FaMapMarkerAlt,
   FaMedal,
   FaStore,
+  FaTimes,
   FaSyncAlt,
   FaUsers,
 } from "react-icons/fa";
@@ -95,10 +98,12 @@ export default function Dashboard({ onLogout }: Props) {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("demo");
   const [seccionActiva, setSeccionActiva] = useState<Seccion>("resumen");
   const [mesSeleccionado, setMesSeleccionado] = useState("MAY");
-const [proveedorSeleccionado, setProveedorSeleccionado] = useState("");
-const [familiaSeleccionada, setFamiliaSeleccionada] = useState("");
-const [bodegaSeleccionada, setBodegaSeleccionada] = useState("");
-const [productoSeleccionado, setProductoSeleccionado] = useState("");
+  const [proveedorSeleccionado, setProveedorSeleccionado] = useState("");
+  const [familiaSeleccionada, setFamiliaSeleccionada] = useState("");
+  const [bodegaSeleccionada, setBodegaSeleccionada] = useState("");
+  const [productoSeleccionado, setProductoSeleccionado] = useState("");
+  const [menuMobileAbierto, setMenuMobileAbierto] = useState(false);
+  const [filtrosMobileAbiertos, setFiltrosMobileAbiertos] = useState(false);
 
   const actualizarDatos = async () => {
     try {
@@ -107,12 +112,12 @@ const [productoSeleccionado, setProductoSeleccionado] = useState("");
       setSyncStatus("loading");
 
       const respuesta = await obtenerDashboard({
-  mes: mesSeleccionado,
-  proveedor: proveedorSeleccionado,
-  familia: familiaSeleccionada,
-  bodega: bodegaSeleccionada,
-  producto: productoSeleccionado,
-});
+        mes: mesSeleccionado,
+        proveedor: proveedorSeleccionado,
+        familia: familiaSeleccionada,
+        bodega: bodegaSeleccionada,
+        producto: productoSeleccionado,
+      });
 
       setData({
         ...demoData,
@@ -137,18 +142,18 @@ const [productoSeleccionado, setProductoSeleccionado] = useState("");
   };
 
   useEffect(() => {
-  actualizarDatos();
+    actualizarDatos();
 
-  const interval = window.setInterval(actualizarDatos, 300000);
+    const interval = window.setInterval(actualizarDatos, 300000);
 
-  return () => window.clearInterval(interval);
-}, [
-  mesSeleccionado,
-  proveedorSeleccionado,
-  familiaSeleccionada,
-  bodegaSeleccionada,
-  productoSeleccionado,
-]);
+    return () => window.clearInterval(interval);
+  }, [
+    mesSeleccionado,
+    proveedorSeleccionado,
+    familiaSeleccionada,
+    bodegaSeleccionada,
+    productoSeleccionado,
+  ]);
 
   const ventaReal =
     Number(data.ventaReal || 0) ||
@@ -193,7 +198,38 @@ const [productoSeleccionado, setProductoSeleccionado] = useState("");
 
   return (
     <div className="surco-bi">
-      <aside className="surco-sidebar">
+      <div className="mobile-action-bar">
+        <button type="button" onClick={() => setMenuMobileAbierto(true)}>
+          <FaBars /> Menú
+        </button>
+        <button type="button" onClick={() => setFiltrosMobileAbiertos(true)}>
+          <FaFilter /> Filtros
+        </button>
+      </div>
+
+      <div
+        className={`mobile-backdrop ${menuMobileAbierto || filtrosMobileAbiertos ? "show" : ""}`}
+        onClick={() => {
+          setMenuMobileAbierto(false);
+          setFiltrosMobileAbiertos(false);
+        }}
+      />
+
+      <aside
+        className={`surco-sidebar ${
+          menuMobileAbierto || filtrosMobileAbiertos ? "mobile-open" : ""
+        } ${filtrosMobileAbiertos ? "filters-mode" : ""}`}
+      >
+        <button
+          type="button"
+          className="mobile-close"
+          onClick={() => {
+            setMenuMobileAbierto(false);
+            setFiltrosMobileAbiertos(false);
+          }}
+        >
+          <FaTimes />
+        </button>
         <div className="surco-logo">SURCO</div>
         <span className="app-subtitle">Executive</span>
 
@@ -203,7 +239,10 @@ const [productoSeleccionado, setProductoSeleccionado] = useState("");
               key={item.id}
               className={seccionActiva === item.id ? "active" : ""}
               type="button"
-              onClick={() => setSeccionActiva(item.id)}
+              onClick={() => {
+                setSeccionActiva(item.id);
+                setMenuMobileAbierto(false);
+              }}
             >
               {item.icon}
               {item.label}
@@ -212,8 +251,17 @@ const [productoSeleccionado, setProductoSeleccionado] = useState("");
           ))}
         </nav>
 
-        <div className="filters-card">
-  <h3>FILTROS</h3>
+        <div className={`filters-card ${filtrosMobileAbiertos ? "filters-open" : ""}`}>
+  <div className="filters-header">
+    <h3>FILTROS</h3>
+    <button
+      type="button"
+      className="filters-close"
+      onClick={() => setFiltrosMobileAbiertos(false)}
+    >
+      <FaTimes />
+    </button>
+  </div>
 
   <label>
     Mes
@@ -536,7 +584,7 @@ const [productoSeleccionado, setProductoSeleccionado] = useState("");
   function renderMesesPanel(title = "PRESUPUESTO VS REAL (MENSUAL)") {
     return (
       <Panel className="month-panel" title={title}>
-        <ResponsiveContainer width="100%" height={260}>
+        <ResponsiveContainer width="100%" height={320}>
           <BarChart data={meses}>
             <CartesianGrid stroke="rgba(255,255,255,.06)" vertical={false} />
             <XAxis dataKey="mes" stroke="#94a3b8" />
