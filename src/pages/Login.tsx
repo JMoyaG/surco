@@ -7,7 +7,7 @@ type Props = {
 const usuarios = [
   {
     usuario: "Marcelo",
-    password: "Surco2026",
+    password: "jose.el.mejor.elemento",
     nombre: "Marcelo Rivera",
   },
   {
