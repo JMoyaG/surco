@@ -59,6 +59,15 @@ const demoData: DashboardPayload = {
   proveedores: [],
   sucursales: [],
 };
+
+const productosDemo = [
+  { Producto: "Fertilizante Premium", Familia: "Fertilizantes", VentaNeta: 82_450_000, KiloLitro: 126_500 },
+  { Producto: "Foliares Especializados", Familia: "Foliares", VentaNeta: 54_110_000, KiloLitro: 43_200 },
+  { Producto: "Herbicida Selectivo", Familia: "Herbicidas", VentaNeta: 47_900_000, KiloLitro: 31_870 },
+  { Producto: "Semilla Maíz", Familia: "Semillas", VentaNeta: 36_720_000, KiloLitro: 18_430 },
+  { Producto: "Insecticida Técnico", Familia: "Insecticidas", VentaNeta: 25_300_000, KiloLitro: 12_950 },
+];
+
 const menuItems: Array<{ id: Seccion; label: string; icon: ReactNode; badge?: number }> = [
   { id: "resumen", label: "Resumen Ejecutivo", icon: <FaHome /> },
   { id: "ventas", label: "Ventas", icon: <FaChartLine /> },
