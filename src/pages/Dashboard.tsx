@@ -186,7 +186,7 @@ export default function Dashboard({ onLogout }: Props) {
 
   const proveedores = data.proveedores.slice(0, 5);
   const familias = data.familias.slice(0, 10);
-  const sucursales = data.sucursales.slice(0, 5);
+  const sucursales = data.sucursales;
   const meses = data.meses;
   const datosGrafico = useMemo(() => {
     if (vistaGrafico === "mensual") return meses;
