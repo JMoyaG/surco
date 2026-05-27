@@ -463,17 +463,17 @@ export default function Dashboard({ onLogout }: Props) {
 
   function renderMapaPanel(title = "MAPA DE SUCURSALES") {
   const sucursalesMapa = [
-    { nombre: "GUARCO", lat: 9.838, lng: -83.945 },
-    { nombre: "COT", lat: 9.895, lng: -83.874 },
-    { nombre: "CEDI GRUPO SURCO", lat: 9.870, lng: -83.910 },
-    { nombre: "CIPRESES", lat: 9.892, lng: -83.807 },
-    { nombre: "PACAYAS", lat: 9.915, lng: -83.811 },
-    { nombre: "CAPELLADES", lat: 9.929, lng: -83.786 },
-    { nombre: "SAN GERARDO", lat: 9.913, lng: -83.846 },
-    { nombre: "LLANO GRANDE", lat: 9.899, lng: -83.927 },
-    { nombre: "TIERRA BLANCA", lat: 9.918, lng: -83.892 },
-    { nombre: "IRAZÚ", lat: 9.977, lng: -83.852 },
-  ];
+  { nombre: "GUARCO", lat: 9.838, lng: -83.945, cumplimiento: 0 },
+  { nombre: "COT", lat: 9.895, lng: -83.874, cumplimiento: 0 },
+  { nombre: "CEDI GRUPO SURCO", lat: 9.870, lng: -83.910, cumplimiento: 7.9 },
+  { nombre: "CIPRESES", lat: 9.892, lng: -83.807, cumplimiento: 6.5 },
+  { nombre: "PACAYAS", lat: 9.915, lng: -83.811, cumplimiento: 0 },
+  { nombre: "CAPELLADES", lat: 9.929, lng: -83.786, cumplimiento: 13.5 },
+  { nombre: "SAN GERARDO", lat: 9.913, lng: -83.846, cumplimiento: 0 },
+  { nombre: "LLANO GRANDE", lat: 9.899, lng: -83.927, cumplimiento: 5.2 },
+  { nombre: "TIERRA BLANCA", lat: 9.918, lng: -83.892, cumplimiento: 12.0 },
+  { nombre: "IRAZÚ", lat: 9.977, lng: -83.852, cumplimiento: 0 },
+];
 
   return (
     <Panel className="map-panel google-real-panel" title={title}>
@@ -502,19 +502,7 @@ export default function Dashboard({ onLogout }: Props) {
   <Popup>
   <div className="map-popup">
     <strong>{sucursal.nombre}</strong>
-
-    {(() => {
-      const dato = sucursales.find((s) =>
-        sucursal.nombre.toUpperCase().includes(s.Sucursal?.toUpperCase() || "") ||
-        s.Sucursal?.toUpperCase().includes(sucursal.nombre.toUpperCase())
-      );
-
-      return (
-        <span>
-          Cumplimiento: {dato ? Number(dato.Cumplimiento || 0).toFixed(1) : "Sin datos"}%
-        </span>
-      );
-    })()}
+    <span>Cumplimiento: {sucursal.cumplimiento.toFixed(1)}%</span>
   </div>
 </Popup>
 </CircleMarker>
