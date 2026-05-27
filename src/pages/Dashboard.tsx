@@ -500,8 +500,19 @@ export default function Dashboard({ onLogout }: Props) {
   }}
 >
   <Popup>
+  <div className="map-popup">
     <strong>{sucursal.nombre}</strong>
-  </Popup>
+    <span>
+      Cumplimiento:{" "}
+      {Number(
+        sucursales.find(
+          (s) => s.Sucursal?.toUpperCase() === sucursal.nombre.toUpperCase()
+        )?.Cumplimiento || 0
+      ).toFixed(1)}
+      %
+    </span>
+  </div>
+</Popup>
 </CircleMarker>
         ))}
       </MapContainer>
