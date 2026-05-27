@@ -827,3 +827,19 @@ body{overflow-x:hidden}
   color: white;
   font-weight: 700;
 }
+.map-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.map-popup strong {
+  color: #70e000;
+  font-size: 13px;
+}
+
+.map-popup span {
+  color: #111 !important;
+  font-weight: 700;
+  font-size: 12px;
+}
