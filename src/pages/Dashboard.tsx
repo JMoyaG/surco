@@ -53,20 +53,12 @@ const demoData: DashboardPayload = {
   presupuesto: 707_170_000,
   ventaReal: 554_220_000,
   kiloLitro: 1_110_000,
+  productos: [],
   meses: [],
   familias: [],
   proveedores: [],
   sucursales: [],
 };
-
-const productosDemo = [
-  { Producto: "Fertilizante Premium", Familia: "Fertilizantes", VentaNeta: 82_450_000, KiloLitro: 126_500 },
-  { Producto: "Foliares Especializados", Familia: "Foliares", VentaNeta: 54_110_000, KiloLitro: 43_200 },
-  { Producto: "Herbicida Selectivo", Familia: "Herbicidas", VentaNeta: 47_900_000, KiloLitro: 31_870 },
-  { Producto: "Semilla Maíz", Familia: "Semillas", VentaNeta: 36_720_000, KiloLitro: 18_430 },
-  { Producto: "Insecticida Técnico", Familia: "Insecticidas", VentaNeta: 25_300_000, KiloLitro: 12_950 },
-];
-
 const menuItems: Array<{ id: Seccion; label: string; icon: ReactNode; badge?: number }> = [
   { id: "resumen", label: "Resumen Ejecutivo", icon: <FaHome /> },
   { id: "ventas", label: "Ventas", icon: <FaChartLine /> },
@@ -566,35 +558,40 @@ export default function Dashboard({ onLogout }: Props) {
     );
   }
 
-  function renderProductos() {
-    return (
-      <section className="section-page">
-        <SectionHeader title="Productos" subtitle="Top productos por venta, familia y kilo/litro." />
-        <Panel className="products-panel" title="TOP PRODUCTOS">
-          <table className="summary-table">
-            <thead>
-              <tr>
-                <th>Producto</th>
-                <th>Familia</th>
-                <th>Venta Neta</th>
-                <th>K-L</th>
+ function renderProductos() {
+  const productos = data.productos || [];
+
+  return (
+    <section className="section-page">
+      <SectionHeader title="Productos" subtitle="Todos los productos por venta, familia, proveedor y kilo/litro." />
+
+      <Panel className="products-panel" title="PRODUCTOS">
+        <table className="summary-table">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Familia</th>
+              <th>Proveedor</th>
+              <th>Venta Neta</th>
+              <th>K-L</th>
+            </tr>
+          </thead>
+          <tbody>
+            {productos.map((p) => (
+              <tr key={`${p.Producto}-${p.Proveedor}`}>
+                <td>{p.Producto}</td>
+                <td>{p.Familia}</td>
+                <td>{p.Proveedor}</td>
+                <td>{formatMoney(Number(p.VentaNeta || 0))}</td>
+                <td>{formatKiloLitro(Number(p.KiloLitro || 0))}</td>
               </tr>
-            </thead>
-            <tbody>
-              {productosDemo.map((p) => (
-                <tr key={p.Producto}>
-                  <td>{p.Producto}</td>
-                  <td>{p.Familia}</td>
-                  <td>{formatMoney(p.VentaNeta)}</td>
-                  <td>{formatKiloLitro(p.KiloLitro)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Panel>
-      </section>
-    );
-  }
+            ))}
+          </tbody>
+        </table>
+      </Panel>
+    </section>
+  );
+}
 
   function renderAlertas() {
     return (

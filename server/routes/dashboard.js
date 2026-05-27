@@ -275,18 +275,45 @@ async function construirDashboard(req, res) {
         real: Number(ventasRow?.Real || 0),
       };
     });
-
+    const productos = await queryRecordset(
+  pool,
+  `
+  SELECT
+    ISNULL(NULLIF(LTRIM(RTRIM(Producto)), ''), 'SIN PRODUCTO') AS Producto,
+    ISNULL(NULLIF(LTRIM(RTRIM(Familia)), ''), 'SIN FAMILIA') AS Familia,
+    ISNULL(NULLIF(LTRIM(RTRIM(Proveedor)), ''), 'SIN PROVEEDOR') AS Proveedor,
+    CAST(SUM(Venta_Neta2) AS decimal(18,2)) AS VentaNeta,
+    CAST(SUM(
+      CASE 
+        WHEN UPPER(LTRIM(RTRIM(ISNULL(UnidadFinal, '')))) 
+        IN ('KG','KILO','KILOS','LTR','LITRO','LITROS') 
+        THEN CantidadFinal 
+        ELSE 0 
+      END
+    ) AS decimal(18,2)) AS KiloLitro
+  FROM surco_tiendas
+  WHERE MONTH(FechaVenta) = @mes
+    AND YEAR(FechaVenta) = @anio
+  GROUP BY
+    ISNULL(NULLIF(LTRIM(RTRIM(Producto)), ''), 'SIN PRODUCTO'),
+    ISNULL(NULLIF(LTRIM(RTRIM(Familia)), ''), 'SIN FAMILIA'),
+    ISNULL(NULLIF(LTRIM(RTRIM(Proveedor)), ''), 'SIN PROVEEDOR')
+  ORDER BY SUM(Venta_Neta2) DESC;
+  `,
+  params
+);
     res.json({
-      ok: true,
-      fechaActualizacion: new Date().toLocaleString("es-CR"),
-      presupuesto: presupuestoTotal,
-      ventaReal: ventaRealTotal,
-      kiloLitro: kiloLitroTotal,
-      proveedores,
-      familias,
-      sucursales,
-      meses,
-      debug: {
+  ok: true,
+  fechaActualizacion: new Date().toLocaleString("es-CR"),
+  presupuesto: presupuestoTotal,
+  ventaReal: ventaRealTotal,
+  kiloLitro: kiloLitroTotal,
+  proveedores,
+  familias,
+  sucursales,
+  meses,
+  productos,
+  debug: {
         mes,
         mesCodigo,
         anio,

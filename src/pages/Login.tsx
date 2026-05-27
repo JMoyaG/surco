@@ -11,18 +11,23 @@ const usuarios = [
     nombre: "Marcelo Rivera",
   },
   {
-    usuario: "Sammy",
+    usuario: "JuanC",
     password: "Surco2026",
+    nombre: "Juan Carlos",
+  },
+  {
+    usuario: "Sammy@",
+    password: "Lu201704",
     nombre: "Sammy Rojas",
   },
   {
-    usuario: "Esteban",
-    password: "Surco2026",
+    usuario: "EstebanGA",
+    password: "GA1919",
     nombre: "Esteban Gomez",
   },
   {
-    usuario: "Esteban",
-    password: "Surco2026",
+    usuario: "EstebanU",
+    password: "Emuh1694",
     nombre: "Esteban Ureña",
   },
   {

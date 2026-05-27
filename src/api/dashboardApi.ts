@@ -23,7 +23,13 @@ export type MesResumen = {
   presupuesto: number;
   real: number;
 };
-
+export type ProductoResumen = {
+  Producto: string;
+  Familia: string;
+  Proveedor: string;
+  VentaNeta: number;
+  KiloLitro: number;
+};
 export type DashboardPayload = {
   ok: boolean;
   fechaActualizacion: string;
@@ -36,7 +42,7 @@ export type DashboardPayload = {
   familias: FamiliaResumen[];
   sucursales: SucursalResumen[];
   meses: MesResumen[];
-
+productos: ProductoResumen[];
   opciones?: {
     proveedores: string[];
     familias: string[];
@@ -44,6 +50,7 @@ export type DashboardPayload = {
     productos: string[];
   };
 };
+
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
