@@ -121,7 +121,7 @@ router.get("/resumen", async (req, res) => {
         SELECT
           Proveedor,
           SUM(Venta_Neta2) AS VentaNeta,
-          SUM(CantidadFinal) AS KiloLitro
+          SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(UnidadFinal, '')))) IN ('KG','KILO','KILOS','LTR','LITRO','LITROS') THEN CantidadFinal ELSE 0 END) AS KiloLitro
         FROM surco_tiendas
         WHERE MONTH(FechaVenta) = @mes
           AND YEAR(FechaVenta) = @anio
@@ -253,7 +253,7 @@ router.get("/proveedores", async (req, res) => {
       SELECT TOP 10
         Proveedor,
         CAST(SUM(Venta_Neta2) AS decimal(18,2)) AS VentaNeta,
-        CAST(SUM(CantidadFinal) AS decimal(18,2)) AS KiloLitro
+        CAST(SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(UnidadFinal, '')))) IN ('KG','KILO','KILOS','LTR','LITRO','LITROS') THEN CantidadFinal ELSE 0 END) AS decimal(18,2)) AS KiloLitro
       FROM surco_tiendas
       WHERE MONTH(FechaVenta) = @mes
         AND YEAR(FechaVenta) = @anio

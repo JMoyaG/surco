@@ -572,5 +572,245 @@ body{overflow-x:hidden}
   }
 }
 
+/* =========================
+   AJUSTES GERENCIALES CARTAGO + CHARTS
+   ========================= */
+.month-panel {
+  position: relative;
+  min-height: 315px;
+}
 
-.period-selector{display:flex;justify-content:flex-end;margin-bottom:10px}.period-selector select{background:#081a33;color:#fff;border:1px solid rgba(255,255,255,.15);padding:8px 12px;border-radius:8px}.cartago-map{background:linear-gradient(135deg,#0f2747,#08111f);border:1px solid rgba(255,255,255,.08)}.cartago-map:before{content:"CARTAGO";position:absolute;left:20px;top:12px;color:rgba(255,255,255,.12);font-size:42px;font-weight:700;letter-spacing:4px}.fake-map{min-height:220px}.p1{left:58%;top:15%}.p2{right:12%;top:38%}.p3{left:52%;bottom:18%}.p4{left:28%;bottom:16%}.p5{left:38%;top:42%}
+.chart-toolbar {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chart-toolbar span {
+  color: #7db7ff;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+}
+
+.chart-toolbar select {
+  min-width: 138px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid rgba(125, 183, 255, .35);
+  background: #071426;
+  color: #fff;
+  padding: 0 10px;
+  font-weight: 850;
+  outline: none;
+}
+
+.chart-scroll {
+  width: 100%;
+  height: 260px;
+  margin-top: 18px;
+}
+
+.recharts-wrapper {
+  overflow: visible !important;
+}
+
+.gauge-panel {
+  overflow: visible;
+}
+
+.gauge-wrap {
+  height: 250px;
+  padding-top: 4px;
+}
+
+.premium-gauge {
+  width: min(100%, 300px);
+  height: 150px;
+  margin-top: 10px;
+}
+
+.gauge-labels {
+  width: min(100%, 330px);
+  margin: 4px auto 0;
+  padding: 0 8px;
+}
+
+.gauge-footer {
+  width: min(100%, 360px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.gauge-footer strong {
+  font-size: clamp(15px, 1.4vw, 18px);
+  white-space: nowrap;
+}
+
+.map-panel {
+  min-height: 260px;
+}
+
+.cartago-layout {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 14px;
+  height: 200px;
+}
+
+.cartago-map {
+  position: relative;
+  min-height: 190px;
+  border: 1px solid rgba(125, 183, 255, .18);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 70% 30%, rgba(112,224,0,.12), transparent 22%),
+    radial-gradient(circle at 28% 60%, rgba(29,140,248,.16), transparent 30%),
+    linear-gradient(135deg, rgba(8,24,43,.98), rgba(3,10,22,.96));
+  overflow: hidden;
+}
+
+.cartago-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 18px 28px rgba(0,0,0,.32));
+}
+
+.cartago-watermark {
+  font-size: 42px;
+  font-weight: 950;
+  letter-spacing: 8px;
+  fill: rgba(148, 163, 184, .16);
+}
+
+.map-pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  grid-template-columns: 10px max-content;
+  column-gap: 6px;
+  align-items: center;
+  padding: 5px 7px;
+  border-radius: 10px;
+  background: rgba(2, 6, 23, .48);
+  border: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 10px 26px rgba(0,0,0,.26);
+  backdrop-filter: blur(10px);
+  font-size: 11px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.map-pin i {
+  grid-row: span 2;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 16px currentColor;
+}
+
+.map-pin strong {
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-pin span {
+  font-size: 11px;
+  font-weight: 950;
+  opacity: .95;
+}
+
+.map-pin.good { color: #70e000; }
+.map-pin.ok { color: #84cc16; }
+.map-pin.warn { color: #facc15; }
+.map-pin.bad { color: #ff6b6b; }
+
+.map-legend {
+  width: auto;
+  padding: 8px 0;
+}
+
+.map-legend span {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: #e5eefc;
+  font-weight: 800;
+}
+
+.map-legend i {
+  flex: 0 0 auto;
+}
+
+.summary-table td:nth-child(4),
+.summary-table th:nth-child(4) {
+  text-align: right;
+}
+
+@media(max-width:1500px){
+  .chart-toolbar{position: static; margin-top: -4px; margin-bottom: 6px; justify-content: flex-end;}
+  .chart-scroll{margin-top: 0;}
+}
+
+@media(max-width:900px){
+  .cartago-layout{display:block;height:auto;}
+  .cartago-map{height:230px;}
+  .chart-toolbar{align-items: stretch; flex-direction: column;}
+  .chart-toolbar select{width:100%;}
+}
+.cartago-map img {
+  object-fit: cover;
+  opacity: 0.28;
+  filter:
+    grayscale(1)
+    brightness(0.45)
+    contrast(1.4)
+    saturate(0);
+}
+.cartago-map {
+  height: 260px;
+}
+.real-cartago-map {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0.34;
+  filter:
+    grayscale(1)
+    brightness(0.5)
+    contrast(1.3);
+}
+.google-real-panel {
+  min-height: 360px;
+}
+
+.real-leaflet-map {
+  width: 100%;
+  height: 315px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(80, 140, 220, 0.35);
+}
+
+.leaflet-container {
+  background: #071522;
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: #071522;
+  color: white;
+  border: 1px solid rgba(80, 140, 220, 0.35);
+}

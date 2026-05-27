@@ -162,7 +162,7 @@ async function construirDashboard(req, res) {
       `
       SELECT
         CAST(SUM(Venta_Neta2) AS decimal(18,2)) AS VentaReal,
-        CAST(SUM(CantidadFinal) AS decimal(18,2)) AS KiloLitro
+        CAST(SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(UnidadFinal, '')))) IN ('KG','KILO','KILOS','LTR','LITRO','LITROS') THEN CantidadFinal ELSE 0 END) AS decimal(18,2)) AS KiloLitro
       FROM surco_tiendas
       WHERE MONTH(FechaVenta) = @mes
         AND YEAR(FechaVenta) = @anio;
@@ -179,7 +179,7 @@ async function construirDashboard(req, res) {
       SELECT TOP 5
         ISNULL(NULLIF(LTRIM(RTRIM(Proveedor)), ''), 'SIN PROVEEDOR') AS Proveedor,
         CAST(SUM(Venta_Neta2) AS decimal(18,2)) AS VentaNeta,
-        CAST(SUM(CantidadFinal) AS decimal(18,2)) AS KiloLitro
+        CAST(SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(UnidadFinal, '')))) IN ('KG','KILO','KILOS','LTR','LITRO','LITROS') THEN CantidadFinal ELSE 0 END) AS decimal(18,2)) AS KiloLitro
       FROM surco_tiendas
       WHERE MONTH(FechaVenta) = @mes
         AND YEAR(FechaVenta) = @anio
@@ -319,7 +319,7 @@ router.get("/proveedores", async (req, res) => {
       SELECT TOP 10
         ISNULL(NULLIF(LTRIM(RTRIM(Proveedor)), ''), 'SIN PROVEEDOR') AS Proveedor,
         CAST(SUM(Venta_Neta2) AS decimal(18,2)) AS VentaNeta,
-        CAST(SUM(CantidadFinal) AS decimal(18,2)) AS KiloLitro
+        CAST(SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(UnidadFinal, '')))) IN ('KG','KILO','KILOS','LTR','LITRO','LITROS') THEN CantidadFinal ELSE 0 END) AS decimal(18,2)) AS KiloLitro
       FROM surco_tiendas
       WHERE MONTH(FechaVenta) = @mes
         AND YEAR(FechaVenta) = @anio

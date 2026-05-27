@@ -32,9 +32,11 @@ import {
 import type { DashboardPayload } from "../api/dashboardApi";
 import { obtenerDashboard } from "../api/dashboardApi";
 import "./dashboard.css";
-
+import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
 type Props = { onLogout: () => void };
 type SyncStatus = "loading" | "real" | "demo" | "error";
+type VistaGrafico = "mensual" | "cuatrimestre";
 type Seccion =
   | "resumen"
   | "ventas"
@@ -80,8 +82,21 @@ function formatMoney(value: number, decimals = 2) {
   return `₡${(Number(value || 0) / 1_000_000).toFixed(decimals)} M`;
 }
 
-function formatNumber(value: number) {
-  return Number(value || 0).toLocaleString("es-CR");
+function formatKiloLitro(value: number) {
+  const numero = Number(value || 0);
+
+  if (Math.abs(numero) >= 1_000) {
+    return `${(numero / 1_000).toLocaleString("es-CR", {
+      maximumFractionDigits: 1,
+      minimumFractionDigits: 0,
+    })} mil`;
+  }
+
+  return numero.toLocaleString("es-CR", { maximumFractionDigits: 0 });
+}
+
+function getChartMoneyTick(value: number) {
+  return `₡${(Number(value || 0) / 1_000_000).toLocaleString("es-CR", { maximumFractionDigits: 0 })}M`;
 }
 
 function getStatusClass(cumplimiento: number) {
@@ -102,7 +117,7 @@ export default function Dashboard({ onLogout }: Props) {
   const [familiaSeleccionada, setFamiliaSeleccionada] = useState("");
   const [bodegaSeleccionada, setBodegaSeleccionada] = useState("");
   const [productoSeleccionado, setProductoSeleccionado] = useState("");
-  const [periodoVista, setPeriodoVista] = useState("mensual");
+  const [vistaGrafico, setVistaGrafico] = useState<VistaGrafico>("mensual");
   const [menuMobileAbierto, setMenuMobileAbierto] = useState(false);
   const [filtrosMobileAbiertos, setFiltrosMobileAbiertos] = useState(false);
 
@@ -171,28 +186,25 @@ export default function Dashboard({ onLogout }: Props) {
   const proveedores = data.proveedores.slice(0, 5);
   const familias = data.familias.slice(0, 10);
   const sucursales = data.sucursales.slice(0, 5);
-  const mesesBase = data.meses;
+  const meses = data.meses;
+  const datosGrafico = useMemo(() => {
+    if (vistaGrafico === "mensual") return meses;
 
-  const meses = useMemo(() => {
-    if (periodoVista === "mensual") return mesesBase;
+    const grupos = [
+      { mes: "C1 Ene-Abr", inicio: 0, fin: 4 },
+      { mes: "C2 May-Ago", inicio: 4, fin: 8 },
+      { mes: "C3 Sep-Dic", inicio: 8, fin: 12 },
+    ];
 
-    const grupos = {
-      c1: { nombre: "Cuatrimestre 1", meses: ["ENE","FEB","MAR","ABR"] },
-      c2: { nombre: "Cuatrimestre 2", meses: ["MAY","JUN","JUL","AGO"] },
-      c3: { nombre: "Cuatrimestre 3", meses: ["SEP","OCT","NOV","DIC"] },
-    };
-
-    const grupo = grupos[periodoVista as keyof typeof grupos];
-    if (!grupo) return mesesBase;
-
-    const filtrados = mesesBase.filter((m:any) => grupo.meses.includes(m.mes));
-
-    return [{
-      mes: grupo.nombre,
-      presupuesto: filtrados.reduce((a:any,b:any)=>a + Number(b.presupuesto || 0),0),
-      real: filtrados.reduce((a:any,b:any)=>a + Number(b.real || 0),0),
-    }];
-  }, [mesesBase, periodoVista]);
+    return grupos.map((grupo) => {
+      const filas = meses.slice(grupo.inicio, grupo.fin);
+      return {
+        mes: grupo.mes,
+        presupuesto: filas.reduce((acc, item) => acc + Number(item.presupuesto || 0), 0),
+        real: filas.reduce((acc, item) => acc + Number(item.real || 0), 0),
+      };
+    });
+  }, [meses, vistaGrafico]);
 
   const topProveedor = proveedores[0]?.Proveedor || "Sin datos";
   const topProveedorVenta = Number(proveedores[0]?.VentaNeta || 0);
@@ -417,7 +429,7 @@ export default function Dashboard({ onLogout }: Props) {
             <Kpi icon={<FaDollarSign />} title="VENTA REAL" value={formatMoney(ventaReal)} detail="Ventas acumuladas" tone="blue" />
             <Kpi icon={<FaBullseye />} title="PRESUPUESTO" value={formatMoney(presupuesto)} detail="Presupuesto del mes" tone="purple" />
             <Kpi icon={<FaChartLine />} title="CUMPLIMIENTO" value={`${cumplimiento.toFixed(1)}%`} detail="Avance presupuestario" tone="green" />
-            <Kpi icon={<FaBoxOpen />} title="K-L VENDIDOS" value={`${Math.round(kiloLitro / 1000).toLocaleString("es-CR")} mil`} detail="Kilos / litros" tone="cyan" />
+            <Kpi icon={<FaBoxOpen />} title="K-L VENDIDOS" value={formatKiloLitro(kiloLitro)} detail="Kilos / litros" tone="cyan" />
             <Kpi icon={<FaMedal />} title="TOP PROVEEDOR" value={topProveedor} detail={formatMoney(topProveedorVenta)} tone="orange" />
             <Kpi icon={<FaStore />} title="TOP SUCURSAL" value={topSucursal} detail={formatMoney(topSucursalVenta)} tone="pink" />
           </section>
@@ -434,21 +446,68 @@ export default function Dashboard({ onLogout }: Props) {
       </main>
     </div>
   );
-
   function renderResumen() {
-    return (
-      <section className="dashboard-grid">
-        {renderGaugePanel()}
-        {renderMesesPanel()}
-        {renderFamiliasPanel()}
-        {renderTopProveedoresPanel()}
-        {renderSucursalesPanel()}
-        {renderMapaPanel()}
-        {renderInsightsPanel()}
-        {renderResumenProveedorPanel()}
-      </section>
-    );
-  }
+  return (
+    <section className="dashboard-grid">
+      {renderGaugePanel()}
+      {renderMesesPanel()}
+      {renderFamiliasPanel()}
+      {renderTopProveedoresPanel()}
+      {renderSucursalesPanel()}
+      {renderMapaPanel()}
+      {renderInsightsPanel()}
+      {renderResumenProveedorPanel()}
+    </section>
+  );
+}
+
+  function renderMapaPanel(title = "MAPA DE SUCURSALES") {
+  const sucursalesMapa = [
+    { nombre: "GUARCO", lat: 9.838, lng: -83.945 },
+    { nombre: "COT", lat: 9.895, lng: -83.874 },
+    { nombre: "CEDI GRUPO SURCO", lat: 9.870, lng: -83.910 },
+    { nombre: "CIPRESES", lat: 9.892, lng: -83.807 },
+    { nombre: "PACAYAS", lat: 9.915, lng: -83.811 },
+    { nombre: "CAPELLADES", lat: 9.929, lng: -83.786 },
+    { nombre: "SAN GERARDO", lat: 9.913, lng: -83.846 },
+    { nombre: "LLANO GRANDE", lat: 9.899, lng: -83.927 },
+    { nombre: "TIERRA BLANCA", lat: 9.918, lng: -83.892 },
+    { nombre: "IRAZÚ", lat: 9.977, lng: -83.852 },
+  ];
+
+  return (
+    <Panel className="map-panel google-real-panel" title={title}>
+      <MapContainer
+        center={{ lat: 9.91, lng: -83.87 }}
+        zoom={11}
+        scrollWheelZoom={false}
+        className="real-leaflet-map"
+      >
+        <TileLayer
+          attribution="&copy; OpenStreetMap"
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+
+        {sucursalesMapa.map((sucursal) => (
+         <CircleMarker
+  key={sucursal.nombre}
+  center={{ lat: sucursal.lat, lng: sucursal.lng }}
+  radius={8}
+  pathOptions={{
+    color: "#70e000",
+    fillColor: "#70e000",
+    fillOpacity: 0.85,
+  }}
+>
+  <Popup>
+    <strong>{sucursal.nombre}</strong>
+  </Popup>
+</CircleMarker>
+        ))}
+      </MapContainer>
+    </Panel>
+  );
+}
 
   function renderVentas() {
     return (
@@ -524,7 +583,7 @@ export default function Dashboard({ onLogout }: Props) {
                   <td>{p.Producto}</td>
                   <td>{p.Familia}</td>
                   <td>{formatMoney(p.VentaNeta)}</td>
-                  <td>{formatNumber(p.KiloLitro)}</td>
+                  <td>{formatKiloLitro(p.KiloLitro)}</td>
                 </tr>
               ))}
             </tbody>
@@ -603,32 +662,51 @@ export default function Dashboard({ onLogout }: Props) {
     );
   }
 
-  function renderMesesPanel(title = "PRESUPUESTO VS REAL (MENSUAL)") {
+  function renderMesesPanel(title = "PRESUPUESTO VS REAL") {
     return (
       <Panel className="month-panel" title={title}>
-        <div className="period-selector">
-          <select value={periodoVista} onChange={(e) => setPeriodoVista(e.target.value)}>
+        <div className="chart-toolbar">
+          <span>{vistaGrafico === "mensual" ? "Detalle mensual" : "Resumen por cuatrimestre"}</span>
+          <select
+            value={vistaGrafico}
+            onChange={(e) => setVistaGrafico(e.target.value as VistaGrafico)}
+          >
             <option value="mensual">Mensual</option>
-            <option value="c1">Cuatrimestre 1</option>
-            <option value="c2">Cuatrimestre 2</option>
-            <option value="c3">Cuatrimestre 3</option>
+            <option value="cuatrimestre">Cuatrimestre</option>
           </select>
         </div>
-        <ResponsiveContainer width="100%" height={320}>
-          <BarChart data={meses}>
-            <CartesianGrid stroke="rgba(255,255,255,.06)" vertical={false} />
-            <XAxis dataKey="mes" stroke="#94a3b8" interval={0} angle={-10} textAnchor="end" height={60} />
-            <YAxis stroke="#94a3b8" />
-            <Tooltip
-  formatter={(value: any, name: any) => [
-    formatMoney(Number(value || 0)),
-    name === "presupuesto" ? "Presupuesto" : "Venta real",
-  ]}
-/>
-            <Bar dataKey="presupuesto" fill="#1d8cf8" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="real" fill="#70e000" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        <div className="chart-scroll">
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart
+              data={datosGrafico}
+              margin={{ top: 10, right: 8, left: 12, bottom: 14 }}
+              barCategoryGap={vistaGrafico === "mensual" ? "22%" : "38%"}
+            >
+              <CartesianGrid stroke="rgba(255,255,255,.06)" vertical={false} />
+              <XAxis
+                dataKey="mes"
+                stroke="#94a3b8"
+                interval={0}
+                tick={{ fontSize: 11 }}
+                tickMargin={10}
+              />
+              <YAxis
+                stroke="#94a3b8"
+                width={58}
+                tick={{ fontSize: 11 }}
+                tickFormatter={getChartMoneyTick}
+              />
+              <Tooltip
+                formatter={(value: any, name: any) => [
+                  formatMoney(Number(value || 0)),
+                  name === "presupuesto" ? "Presupuesto" : "Venta real",
+                ]}
+              />
+              <Bar dataKey="presupuesto" fill="#1d8cf8" radius={[4, 4, 0, 0]} maxBarSize={38} />
+              <Bar dataKey="real" fill="#70e000" radius={[4, 4, 0, 0]} maxBarSize={38} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </Panel>
     );
   }
@@ -692,27 +770,8 @@ export default function Dashboard({ onLogout }: Props) {
     );
   }
 
-  function renderMapaPanel(title = "MAPA DE CUMPLIMIENTO POR SUCURSAL") {
-    return (
-      <Panel className="map-panel" title={title}>
-        <div className="map-box">
-          <div className="map-legend">
-            <span><i className="good" /> Excelente (&gt;110%)</span>
-            <span><i className="ok" /> Bueno (90% - 110%)</span>
-            <span><i className="warn" /> Regular (70% - 90%)</span>
-            <span><i className="bad" /> Bajo (&lt;70%)</span>
-          </div>
-          <div className="fake-map cartago-map">
-            {sucursales.slice(0, 5).map((sucursal, index) => (
-              <b className={`point p${index + 1}`} key={sucursal.Sucursal}>
-                {sucursal.Sucursal}<br />{Number(sucursal.Cumplimiento || 0).toFixed(1)}%
-              </b>
-            ))}
-          </div>
-        </div>
-      </Panel>
-    );
-  }
+
+    
 
   function renderInsightsPanel(title = "INSIGHTS AUTOMÁTICOS") {
     return (
@@ -748,7 +807,7 @@ export default function Dashboard({ onLogout }: Props) {
                   <td>{p.Proveedor}</td>
                   <td>{formatMoney(venta)}</td>
                   <td>{pct.toFixed(1)}%</td>
-                  <td>{formatNumber(Math.round(Number(p.KiloLitro || 0)))}</td>
+                  <td>{formatKiloLitro(Number(p.KiloLitro || 0))}</td>
                   <td>{Number(p.Cumplimiento || 0).toFixed(1)}%</td>
                 </tr>
               );
