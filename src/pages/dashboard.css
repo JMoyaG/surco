@@ -571,3 +571,6 @@ body{overflow-x:hidden}
     height: 36px;
   }
 }
+
+
+.period-selector{display:flex;justify-content:flex-end;margin-bottom:10px}.period-selector select{background:#081a33;color:#fff;border:1px solid rgba(255,255,255,.15);padding:8px 12px;border-radius:8px}.cartago-map{background:linear-gradient(135deg,#0f2747,#08111f);border:1px solid rgba(255,255,255,.08)}.cartago-map:before{content:"CARTAGO";position:absolute;left:20px;top:12px;color:rgba(255,255,255,.12);font-size:42px;font-weight:700;letter-spacing:4px}.fake-map{min-height:220px}.p1{left:58%;top:15%}.p2{right:12%;top:38%}.p3{left:52%;bottom:18%}.p4{left:28%;bottom:16%}.p5{left:38%;top:42%}

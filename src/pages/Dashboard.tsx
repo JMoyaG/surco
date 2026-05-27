@@ -102,6 +102,7 @@ export default function Dashboard({ onLogout }: Props) {
   const [familiaSeleccionada, setFamiliaSeleccionada] = useState("");
   const [bodegaSeleccionada, setBodegaSeleccionada] = useState("");
   const [productoSeleccionado, setProductoSeleccionado] = useState("");
+  const [periodoVista, setPeriodoVista] = useState("mensual");
   const [menuMobileAbierto, setMenuMobileAbierto] = useState(false);
   const [filtrosMobileAbiertos, setFiltrosMobileAbiertos] = useState(false);
 
@@ -170,7 +171,28 @@ export default function Dashboard({ onLogout }: Props) {
   const proveedores = data.proveedores.slice(0, 5);
   const familias = data.familias.slice(0, 10);
   const sucursales = data.sucursales.slice(0, 5);
-  const meses = data.meses;
+  const mesesBase = data.meses;
+
+  const meses = useMemo(() => {
+    if (periodoVista === "mensual") return mesesBase;
+
+    const grupos = {
+      c1: { nombre: "Cuatrimestre 1", meses: ["ENE","FEB","MAR","ABR"] },
+      c2: { nombre: "Cuatrimestre 2", meses: ["MAY","JUN","JUL","AGO"] },
+      c3: { nombre: "Cuatrimestre 3", meses: ["SEP","OCT","NOV","DIC"] },
+    };
+
+    const grupo = grupos[periodoVista as keyof typeof grupos];
+    if (!grupo) return mesesBase;
+
+    const filtrados = mesesBase.filter((m:any) => grupo.meses.includes(m.mes));
+
+    return [{
+      mes: grupo.nombre,
+      presupuesto: filtrados.reduce((a:any,b:any)=>a + Number(b.presupuesto || 0),0),
+      real: filtrados.reduce((a:any,b:any)=>a + Number(b.real || 0),0),
+    }];
+  }, [mesesBase, periodoVista]);
 
   const topProveedor = proveedores[0]?.Proveedor || "Sin datos";
   const topProveedorVenta = Number(proveedores[0]?.VentaNeta || 0);
@@ -395,7 +417,7 @@ export default function Dashboard({ onLogout }: Props) {
             <Kpi icon={<FaDollarSign />} title="VENTA REAL" value={formatMoney(ventaReal)} detail="Ventas acumuladas" tone="blue" />
             <Kpi icon={<FaBullseye />} title="PRESUPUESTO" value={formatMoney(presupuesto)} detail="Presupuesto del mes" tone="purple" />
             <Kpi icon={<FaChartLine />} title="CUMPLIMIENTO" value={`${cumplimiento.toFixed(1)}%`} detail="Avance presupuestario" tone="green" />
-            <Kpi icon={<FaBoxOpen />} title="K-L VENDIDOS" value={`${(kiloLitro / 1_000_000).toFixed(2)} M`} detail="Kilos / litros" tone="cyan" />
+            <Kpi icon={<FaBoxOpen />} title="K-L VENDIDOS" value={`${Math.round(kiloLitro / 1000).toLocaleString("es-CR")} mil`} detail="Kilos / litros" tone="cyan" />
             <Kpi icon={<FaMedal />} title="TOP PROVEEDOR" value={topProveedor} detail={formatMoney(topProveedorVenta)} tone="orange" />
             <Kpi icon={<FaStore />} title="TOP SUCURSAL" value={topSucursal} detail={formatMoney(topSucursalVenta)} tone="pink" />
           </section>
@@ -584,10 +606,18 @@ export default function Dashboard({ onLogout }: Props) {
   function renderMesesPanel(title = "PRESUPUESTO VS REAL (MENSUAL)") {
     return (
       <Panel className="month-panel" title={title}>
+        <div className="period-selector">
+          <select value={periodoVista} onChange={(e) => setPeriodoVista(e.target.value)}>
+            <option value="mensual">Mensual</option>
+            <option value="c1">Cuatrimestre 1</option>
+            <option value="c2">Cuatrimestre 2</option>
+            <option value="c3">Cuatrimestre 3</option>
+          </select>
+        </div>
         <ResponsiveContainer width="100%" height={320}>
           <BarChart data={meses}>
             <CartesianGrid stroke="rgba(255,255,255,.06)" vertical={false} />
-            <XAxis dataKey="mes" stroke="#94a3b8" />
+            <XAxis dataKey="mes" stroke="#94a3b8" interval={0} angle={-10} textAnchor="end" height={60} />
             <YAxis stroke="#94a3b8" />
             <Tooltip
   formatter={(value: any, name: any) => [
@@ -672,7 +702,7 @@ export default function Dashboard({ onLogout }: Props) {
             <span><i className="warn" /> Regular (70% - 90%)</span>
             <span><i className="bad" /> Bajo (&lt;70%)</span>
           </div>
-          <div className="fake-map">
+          <div className="fake-map cartago-map">
             {sucursales.slice(0, 5).map((sucursal, index) => (
               <b className={`point p${index + 1}`} key={sucursal.Sucursal}>
                 {sucursal.Sucursal}<br />{Number(sucursal.Cumplimiento || 0).toFixed(1)}%
@@ -718,7 +748,7 @@ export default function Dashboard({ onLogout }: Props) {
                   <td>{p.Proveedor}</td>
                   <td>{formatMoney(venta)}</td>
                   <td>{pct.toFixed(1)}%</td>
-                  <td>{formatNumber(Number(p.KiloLitro || 0))}</td>
+                  <td>{formatNumber(Math.round(Number(p.KiloLitro || 0)))}</td>
                   <td>{Number(p.Cumplimiento || 0).toFixed(1)}%</td>
                 </tr>
               );
