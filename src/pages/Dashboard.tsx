@@ -502,15 +502,19 @@ export default function Dashboard({ onLogout }: Props) {
   <Popup>
   <div className="map-popup">
     <strong>{sucursal.nombre}</strong>
-    <span>
-      Cumplimiento:{" "}
-      {Number(
-        sucursales.find(
-          (s) => s.Sucursal?.toUpperCase() === sucursal.nombre.toUpperCase()
-        )?.Cumplimiento || 0
-      ).toFixed(1)}
-      %
-    </span>
+
+    {(() => {
+      const dato = sucursales.find((s) =>
+        sucursal.nombre.toUpperCase().includes(s.Sucursal?.toUpperCase() || "") ||
+        s.Sucursal?.toUpperCase().includes(sucursal.nombre.toUpperCase())
+      );
+
+      return (
+        <span>
+          Cumplimiento: {dato ? Number(dato.Cumplimiento || 0).toFixed(1) : "Sin datos"}%
+        </span>
+      );
+    })()}
   </div>
 </Popup>
 </CircleMarker>
