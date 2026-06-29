@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   FaArrowDown,
@@ -19,6 +19,9 @@ import {
   FaTimes,
   FaSyncAlt,
   FaUsers,
+  FaSearch,
+  FaChevronDown,
+  FaChevronUp,
 } from "react-icons/fa";
 import {
   Bar,
@@ -29,8 +32,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { DashboardPayload } from "../api/dashboardApi";
-import { obtenerDashboard } from "../api/dashboardApi";
+import type { DashboardPayload, DetalleVentasPayload, DetalleVenta, VentaDetalleResumen, Cliente80Resumen, PresupuestoFamiliaResumen } from "../api/dashboardApi";
+import { obtenerDashboard, obtenerDetalleVentas } from "../api/dashboardApi";
 import "./dashboard.css";
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
@@ -40,12 +43,29 @@ type VistaGrafico = "mensual" | "cuatrimestre";
 type Seccion =
   | "resumen"
   | "ventas"
+  | "detalle"
   | "presupuesto"
   | "proveedores"
   | "sucursales"
   | "productos"
   | "alertas"
   | "configuracion";
+
+
+type DrillLevel = {
+  field: keyof VentaDetalleResumen;
+  label: string;
+};
+
+type DrillTotals = {
+  precio: number;
+  descuento: number;
+  ventaNeta: number;
+  kiloLitro: number;
+  cantidad: number;
+  vendido: number;
+  lineas: number;
+};
 
 const demoData: DashboardPayload = {
   ok: true,
@@ -58,6 +78,19 @@ const demoData: DashboardPayload = {
   familias: [],
   proveedores: [],
   sucursales: [],
+};
+
+const detalleVacio: DetalleVentasPayload = {
+  ok: true,
+  fechaActualizacion: "",
+  page: 1,
+  pageSize: 100,
+  totalRegistros: 0,
+  totalPaginas: 0,
+  ventaNeta: 0,
+  cantidadTotal: 0,
+  kiloLitro: 0,
+  rows: [],
 };
 
 
@@ -75,6 +108,46 @@ const menuItems: Array<{ id: Seccion; label: string; icon: ReactNode; badge?: nu
 
 function formatMoney(value: number, decimals = 2) {
   return `₡${(Number(value || 0) / 1_000_000).toFixed(decimals)} M`;
+}
+
+function formatMoneyExact(value: number) {
+  return `₡${Number(value || 0).toLocaleString("es-CR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function formatNumber(value: number) {
+  return Number(value || 0).toLocaleString("es-CR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatDateTime(value: any) {
+  if (!value) return "-";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+
+  return date.toLocaleString("es-CR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getDetalleValue(row: DetalleVenta, fields: string[], fallback: any = "-") {
+  for (const field of fields) {
+    const value = row[field];
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return value;
+    }
+  }
+
+  return fallback;
 }
 
 function formatKiloLitro(value: number) {
@@ -101,6 +174,122 @@ function getStatusClass(cumplimiento: number) {
   return "bad";
 }
 
+function normalizarMapa(valor: string) {
+  return String(valor || "")
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9]/g, "");
+}
+
+const COORDENADAS_SUCURSALES: Record<string, { lat: number; lng: number }> = {
+  [normalizarMapa("CAPELLADES")]: { lat: 9.929, lng: -83.786 },
+  [normalizarMapa("TIERRA BLANCA")]: { lat: 9.918, lng: -83.892 },
+  [normalizarMapa("CEDI GRUPO SURCO")]: { lat: 9.870, lng: -83.910 },
+  [normalizarMapa("CIPRESES")]: { lat: 9.892, lng: -83.807 },
+  [normalizarMapa("LLANO GRANDE")]: { lat: 9.899, lng: -83.927 },
+  [normalizarMapa("PACAYAS")]: { lat: 9.915, lng: -83.811 },
+  [normalizarMapa("SAN RAFAEL IRAZU")]: { lat: 9.977, lng: -83.852 },
+  [normalizarMapa("SAN RAFAEL IRAZÚ")]: { lat: 9.977, lng: -83.852 },
+  [normalizarMapa("IRAZU")]: { lat: 9.977, lng: -83.852 },
+  [normalizarMapa("SAN GERARDO")]: { lat: 9.913, lng: -83.846 },
+  [normalizarMapa("COT")]: { lat: 9.895, lng: -83.874 },
+  [normalizarMapa("EL GUARCO")]: { lat: 9.838, lng: -83.945 },
+  [normalizarMapa("GUARCO")]: { lat: 9.838, lng: -83.945 },
+  [normalizarMapa("EL CRISTO")]: { lat: 9.868, lng: -83.918 },
+};
+
+
+type MultiSelectFilterProps = {
+  label: string;
+  options: string[];
+  values: string[];
+  onChange: (values: string[]) => void;
+  allLabel: string;
+  searchPlaceholder?: string;
+};
+
+function MultiSelectFilter({
+  label,
+  options,
+  values,
+  onChange,
+  allLabel,
+  searchPlaceholder = "Buscar...",
+}: MultiSelectFilterProps) {
+  const [filtro, setFiltro] = useState("");
+  const selected = useMemo(() => new Set(values), [values]);
+  const opcionesFiltradas = useMemo(() => {
+    const q = filtro.trim().toUpperCase();
+    if (!q) return options;
+    return options.filter((option) => option.toUpperCase().includes(q));
+  }, [options, filtro]);
+
+  const resumen =
+    values.length === 0
+      ? allLabel
+      : values.length === 1
+        ? values[0]
+        : `${values.length} seleccionados`;
+
+  function toggleValue(value: string) {
+    if (selected.has(value)) {
+      onChange(values.filter((item) => item !== value));
+    } else {
+      onChange([...values, value]);
+    }
+  }
+
+  return (
+    <div className="multi-filter-label">
+      <span className="multi-filter-title">{label}</span>
+      <details className="multi-select-filter">
+        <summary title={resumen}>
+          <span>{resumen}</span>
+          <FaChevronDown />
+        </summary>
+        <div className="multi-select-menu">
+          <div className="multi-search-box">
+            <FaSearch />
+            <input
+              value={filtro}
+              onChange={(e) => setFiltro(e.target.value)}
+              placeholder={searchPlaceholder}
+            />
+          </div>
+
+          <div className="multi-actions-row">
+            <button type="button" onClick={() => onChange([])}>
+              Todos
+            </button>
+            <button type="button" onClick={() => onChange(opcionesFiltradas)} disabled={opcionesFiltradas.length === 0}>
+              Marcar visibles
+            </button>
+          </div>
+
+          <div className="multi-options-list">
+            {opcionesFiltradas.length === 0 ? (
+              <div className="multi-empty">Sin coincidencias</div>
+            ) : (
+              opcionesFiltradas.map((option) => (
+                <label key={option} className="multi-option-row">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(option)}
+                    onChange={() => toggleValue(option)}
+                  />
+                  <span>{option}</span>
+                </label>
+              ))
+            )}
+          </div>
+        </div>
+      </details>
+      {values.length > 0 ? <small className="filter-count">{values.length} activo(s)</small> : null}
+    </div>
+  );
+}
+
 export default function Dashboard({ onLogout }: Props) {
   const [data, setData] = useState<DashboardPayload>(demoData);
   const [cargando, setCargando] = useState(false);
@@ -108,13 +297,21 @@ export default function Dashboard({ onLogout }: Props) {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("demo");
   const [seccionActiva, setSeccionActiva] = useState<Seccion>("resumen");
   const [mesSeleccionado, setMesSeleccionado] = useState("MAY");
-  const [proveedorSeleccionado, setProveedorSeleccionado] = useState("");
-  const [familiaSeleccionada, setFamiliaSeleccionada] = useState("");
-  const [bodegaSeleccionada, setBodegaSeleccionada] = useState("");
-  const [productoSeleccionado, setProductoSeleccionado] = useState("");
+  const [proveedoresSeleccionados, setProveedoresSeleccionados] = useState<string[]>([]);
+  const [familiasSeleccionadas, setFamiliasSeleccionadas] = useState<string[]>([]);
+  const [bodegasSeleccionadas, setBodegasSeleccionadas] = useState<string[]>([]);
+  const [productosSeleccionados, setProductosSeleccionados] = useState<string[]>([]);
+  const [busquedaGeneral, setBusquedaGeneral] = useState("");
   const [vistaGrafico, setVistaGrafico] = useState<VistaGrafico>("mensual");
   const [menuMobileAbierto, setMenuMobileAbierto] = useState(false);
   const [filtrosMobileAbiertos, setFiltrosMobileAbiertos] = useState(false);
+  const [detalle, setDetalle] = useState<DetalleVentasPayload>(detalleVacio);
+  const [detalleCargando, setDetalleCargando] = useState(false);
+  const [busquedaDetalle, setBusquedaDetalle] = useState("");
+  const [paginaDetalle, setPaginaDetalle] = useState(1);
+  const [tamanoDetalle, setTamanoDetalle] = useState(100);
+  const [filaDetalleAbierta, setFilaDetalleAbierta] = useState<number | null>(null);
+  const [drillAbierto, setDrillAbierto] = useState<Record<string, boolean>>({});
 
   const actualizarDatos = async () => {
     try {
@@ -124,10 +321,11 @@ export default function Dashboard({ onLogout }: Props) {
 
       const respuesta = await obtenerDashboard({
         mes: mesSeleccionado,
-        proveedor: proveedorSeleccionado,
-        familia: familiaSeleccionada,
-        bodega: bodegaSeleccionada,
-        producto: productoSeleccionado,
+        proveedor: proveedoresSeleccionados,
+        familia: familiasSeleccionadas,
+        bodega: bodegasSeleccionadas,
+        producto: productosSeleccionados,
+        q: busquedaGeneral,
       });
 
       setData({
@@ -137,6 +335,8 @@ export default function Dashboard({ onLogout }: Props) {
         familias: respuesta.familias?.length ? respuesta.familias : [],
         sucursales: respuesta.sucursales?.length ? respuesta.sucursales : [],
         meses: respuesta.meses?.length ? respuesta.meses : [],
+        productos: respuesta.productos?.length ? respuesta.productos : [],
+        opciones: respuesta.opciones,
       });
 
       setEstadoSync("Datos reales actualizados");
@@ -152,6 +352,31 @@ export default function Dashboard({ onLogout }: Props) {
     }
   };
 
+  const actualizarDetalle = async () => {
+    try {
+      setDetalleCargando(true);
+
+      const respuesta = await obtenerDetalleVentas({
+        mes: mesSeleccionado,
+        proveedor: proveedoresSeleccionados,
+        familia: familiasSeleccionadas,
+        bodega: bodegasSeleccionadas,
+        producto: productosSeleccionados,
+        q: [busquedaGeneral, busquedaDetalle].filter(Boolean).join(" "),
+        page: paginaDetalle,
+        pageSize: tamanoDetalle,
+      });
+
+      setDetalle(respuesta);
+      setFilaDetalleAbierta(null);
+    } catch (error) {
+      console.error(error);
+      setDetalle({ ...detalleVacio, page: paginaDetalle, pageSize: tamanoDetalle });
+    } finally {
+      setDetalleCargando(false);
+    }
+  };
+
   useEffect(() => {
     actualizarDatos();
 
@@ -160,10 +385,41 @@ export default function Dashboard({ onLogout }: Props) {
     return () => window.clearInterval(interval);
   }, [
     mesSeleccionado,
-    proveedorSeleccionado,
-    familiaSeleccionada,
-    bodegaSeleccionada,
-    productoSeleccionado,
+    proveedoresSeleccionados,
+    familiasSeleccionadas,
+    bodegasSeleccionadas,
+    productosSeleccionados,
+    busquedaGeneral,
+  ]);
+
+  useEffect(() => {
+    setPaginaDetalle(1);
+  }, [
+    mesSeleccionado,
+    proveedoresSeleccionados,
+    familiasSeleccionadas,
+    bodegasSeleccionadas,
+    productosSeleccionados,
+    busquedaGeneral,
+    busquedaDetalle,
+    tamanoDetalle,
+  ]);
+
+  useEffect(() => {
+    if (seccionActiva === "detalle") {
+      actualizarDetalle();
+    }
+  }, [
+    seccionActiva,
+    mesSeleccionado,
+    proveedoresSeleccionados,
+    familiasSeleccionadas,
+    bodegasSeleccionadas,
+    productosSeleccionados,
+    busquedaGeneral,
+    busquedaDetalle,
+    paginaDetalle,
+    tamanoDetalle,
   ]);
 
   const ventaReal =
@@ -178,7 +434,7 @@ export default function Dashboard({ onLogout }: Props) {
   const cumplimiento = presupuesto > 0 ? (ventaReal / presupuesto) * 100 : 0;
   const faltante = Math.max(presupuesto - ventaReal, 0);
 
-  const proveedores = data.proveedores.slice(0, 5);
+  const proveedores = data.proveedores.slice(0, 10);
   const familias = data.familias.slice(0, 10);
   const sucursales = data.sucursales;
   const meses = data.meses;
@@ -205,6 +461,19 @@ export default function Dashboard({ onLogout }: Props) {
   const topProveedorVenta = Number(proveedores[0]?.VentaNeta || 0);
   const topSucursal = sucursales[0]?.Sucursal || "Sin datos";
   const topSucursalVenta = Number(sucursales[0]?.VentaNeta || 0);
+  const ventasDetalle = data.ventasDetalle || [];
+  const ventasDetalleFiltradas = useMemo(() => {
+    const q = busquedaDetalle.trim().toUpperCase();
+    if (!q) return ventasDetalle;
+
+    return ventasDetalle.filter((row) => {
+      return Object.values(row).some((value) =>
+        String(value ?? "").toUpperCase().includes(q)
+      );
+    });
+  }, [ventasDetalle, busquedaDetalle]);
+  const clientes80 = data.clientes80 || [];
+  const presupuestoFamilias = data.presupuestoFamilias || [];
 
   const totalTop = proveedores.reduce(
     (acc: number, p) => acc + Number(p.VentaNeta || 0),
@@ -281,110 +550,105 @@ export default function Dashboard({ onLogout }: Props) {
         </nav>
 
         <div className={`filters-card ${filtrosMobileAbiertos ? "filters-open" : ""}`}>
-  <div className="filters-header">
-    <h3>FILTROS</h3>
-    <button
-      type="button"
-      className="filters-close"
-      onClick={() => setFiltrosMobileAbiertos(false)}
-    >
-      <FaTimes />
-    </button>
-  </div>
+          <div className="filters-header">
+            <h3>FILTROS</h3>
+            <button
+              type="button"
+              className="filters-close"
+              onClick={() => setFiltrosMobileAbiertos(false)}
+            >
+              <FaTimes />
+            </button>
+          </div>
 
-  <label>
-    Mes
-    <select
-      value={mesSeleccionado}
-      onChange={(e) => setMesSeleccionado(e.target.value)}
-    >
-      <option value="ENE">Enero 2026</option>
-      <option value="FEB">Febrero 2026</option>
-      <option value="MAR">Marzo 2026</option>
-      <option value="ABR">Abril 2026</option>
-      <option value="MAY">Mayo 2026</option>
-      <option value="JUN">Junio 2026</option>
-      <option value="JUL">Julio 2026</option>
-      <option value="AGO">Agosto 2026</option>
-      <option value="SEP">Septiembre 2026</option>
-      <option value="OCT">Octubre 2026</option>
-      <option value="NOV">Noviembre 2026</option>
-      <option value="DIC">Diciembre 2026</option>
-    </select>
-  </label>
+          <label>
+            Mes
+            <select
+              value={mesSeleccionado}
+              onChange={(e) => {
+                setMesSeleccionado(e.target.value);
+                setEstadoSync("Sincronizando con servidor...");
+                setSyncStatus("loading");
+              }}
+            >
+              <option value="TODO">Todo 2026 / Compañía general</option>
+              <option value="ENE">Enero 2026</option>
+              <option value="FEB">Febrero 2026</option>
+              <option value="MAR">Marzo 2026</option>
+              <option value="ABR">Abril 2026</option>
+              <option value="MAY">Mayo 2026</option>
+              <option value="JUN">Junio 2026</option>
+              <option value="JUL">Julio 2026</option>
+              <option value="AGO">Agosto 2026</option>
+              <option value="SEP">Septiembre 2026</option>
+              <option value="OCT">Octubre 2026</option>
+              <option value="NOV">Noviembre 2026</option>
+              <option value="DIC">Diciembre 2026</option>
+            </select>
+          </label>
 
-  <label>
-    Proveedor
-    <select
-      value={proveedorSeleccionado}
-      onChange={(e) => setProveedorSeleccionado(e.target.value)}
-    >
-      <option value="">Todos</option>
-      {data.opciones?.proveedores?.map((proveedor) => (
-        <option key={proveedor} value={proveedor}>
-          {proveedor}
-        </option>
-      ))}
-    </select>
-  </label>
+          <label>
+            Buscar
+            <div className="filter-search-box">
+              <FaSearch />
+              <input
+                value={busquedaGeneral}
+                onChange={(e) => setBusquedaGeneral(e.target.value)}
+                placeholder="Factura, cliente, producto, código..."
+              />
+            </div>
+          </label>
 
-  <label>
-    Familia
-    <select
-      value={familiaSeleccionada}
-      onChange={(e) => setFamiliaSeleccionada(e.target.value)}
-    >
-      <option value="">Todas</option>
-      {data.opciones?.familias?.map((familia) => (
-        <option key={familia} value={familia}>
-          {familia}
-        </option>
-      ))}
-    </select>
-  </label>
+          <MultiSelectFilter
+            label="Proveedor"
+            options={data.opciones?.proveedores || []}
+            values={proveedoresSeleccionados}
+            onChange={setProveedoresSeleccionados}
+            allLabel="Todos"
+            searchPlaceholder="Buscar proveedor..."
+          />
 
-  <label>
-    Bodega
-    <select
-      value={bodegaSeleccionada}
-      onChange={(e) => setBodegaSeleccionada(e.target.value)}
-    >
-      <option value="">Todas</option>
-      {data.opciones?.bodegas?.map((bodega) => (
-        <option key={bodega} value={bodega}>
-          {bodega}
-        </option>
-      ))}
-    </select>
-  </label>
+          <MultiSelectFilter
+            label="Familia"
+            options={data.opciones?.familias || []}
+            values={familiasSeleccionadas}
+            onChange={setFamiliasSeleccionadas}
+            allLabel="Todas"
+            searchPlaceholder="Buscar familia..."
+          />
 
-  <label>
-    Producto
-    <select
-      value={productoSeleccionado}
-      onChange={(e) => setProductoSeleccionado(e.target.value)}
-    >
-      <option value="">Todos</option>
-      {data.opciones?.productos?.map((producto) => (
-        <option key={producto} value={producto}>
-          {producto}
-        </option>
-      ))}
-    </select>
-  </label>
+          <MultiSelectFilter
+            label="Bodega"
+            options={data.opciones?.bodegas || []}
+            values={bodegasSeleccionadas}
+            onChange={setBodegasSeleccionadas}
+            allLabel="Todas"
+            searchPlaceholder="Buscar bodega..."
+          />
 
-  <button
-    type="button"
-    onClick={() => {
-      setProveedorSeleccionado("");
-      setFamiliaSeleccionada("");
-      setBodegaSeleccionada("");
-      setProductoSeleccionado("");
-    }}
-  >
-    Limpiar filtros
-  </button>
-</div>
+          <MultiSelectFilter
+            label="Producto"
+            options={data.opciones?.productos || []}
+            values={productosSeleccionados}
+            onChange={setProductosSeleccionados}
+            allLabel="Todos"
+            searchPlaceholder="Buscar producto..."
+          />
+
+          <button
+            type="button"
+            onClick={() => {
+              setBusquedaGeneral("");
+              setBusquedaDetalle("");
+              setProveedoresSeleccionados([]);
+              setFamiliasSeleccionadas([]);
+              setBodegasSeleccionadas([]);
+              setProductosSeleccionados([]);
+            }}
+          >
+            Limpiar filtros
+          </button>
+        </div>
       </aside>
 
       <main className="surco-main">
@@ -432,6 +696,7 @@ export default function Dashboard({ onLogout }: Props) {
 
         {seccionActiva === "resumen" && renderResumen()}
         {seccionActiva === "ventas" && renderVentas()}
+        {seccionActiva === "detalle" && renderDetalle()}
         {seccionActiva === "presupuesto" && renderPresupuesto()}
         {seccionActiva === "proveedores" && renderProveedores()}
         {seccionActiva === "sucursales" && renderSucursales()}
@@ -457,66 +722,499 @@ export default function Dashboard({ onLogout }: Props) {
 }
 
   function renderMapaPanel(title = "MAPA DE SUCURSALES") {
-  const sucursalesMapa = [
-  { nombre: "GUARCO", lat: 9.838, lng: -83.945, cumplimiento: 0 },
-  { nombre: "COT", lat: 9.895, lng: -83.874, cumplimiento: 0 },
-  { nombre: "CEDI GRUPO SURCO", lat: 9.870, lng: -83.910, cumplimiento: 7.9 },
-  { nombre: "CIPRESES", lat: 9.892, lng: -83.807, cumplimiento: 6.5 },
-  { nombre: "PACAYAS", lat: 9.915, lng: -83.811, cumplimiento: 0 },
-  { nombre: "CAPELLADES", lat: 9.929, lng: -83.786, cumplimiento: 13.5 },
-  { nombre: "SAN GERARDO", lat: 9.913, lng: -83.846, cumplimiento: 0 },
-  { nombre: "LLANO GRANDE", lat: 9.899, lng: -83.927, cumplimiento: 5.2 },
-  { nombre: "TIERRA BLANCA", lat: 9.918, lng: -83.892, cumplimiento: 12.0 },
-  { nombre: "IRAZÚ", lat: 9.977, lng: -83.852, cumplimiento: 0 },
-];
+    const sucursalesMapa = sucursales
+      .map((sucursal) => {
+        const nombre = sucursal.Sucursal || "SIN SUCURSAL";
+        const coordenada = COORDENADAS_SUCURSALES[normalizarMapa(nombre)];
+        if (!coordenada) return null;
 
-  return (
-    <Panel className="map-panel google-real-panel" title={title}>
-      <MapContainer
-        center={{ lat: 9.91, lng: -83.87 }}
-        zoom={11}
-        scrollWheelZoom={false}
-        className="real-leaflet-map"
-      >
-        <TileLayer
-          attribution="&copy; OpenStreetMap"
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        const cumplimientoSucursal = Number(sucursal.Cumplimiento || 0);
 
-        {sucursalesMapa.map((sucursal) => (
-         <CircleMarker
-  key={sucursal.nombre}
-  center={{ lat: sucursal.lat, lng: sucursal.lng }}
-  radius={8}
-  pathOptions={{
-    color: "#70e000",
-    fillColor: "#70e000",
-    fillOpacity: 0.85,
-  }}
->
-  <Popup>
-  <div className="map-popup">
-    <strong>{sucursal.nombre}</strong>
-    <span>Cumplimiento: {sucursal.cumplimiento.toFixed(1)}%</span>
-  </div>
-</Popup>
-</CircleMarker>
-        ))}
-      </MapContainer>
-    </Panel>
-  );
-}
+        return {
+          nombre,
+          lat: coordenada.lat,
+          lng: coordenada.lng,
+          ventaNeta: Number(sucursal.VentaNeta || 0),
+          cumplimiento: cumplimientoSucursal,
+          lineas: Number(sucursal.LineasDetalle || 0),
+          radius: Math.max(7, Math.min(18, 7 + cumplimientoSucursal / 4)),
+        };
+      })
+      .filter(Boolean) as Array<{
+        nombre: string;
+        lat: number;
+        lng: number;
+        ventaNeta: number;
+        cumplimiento: number;
+        lineas: number;
+        radius: number;
+      }>;
+
+    return (
+      <Panel className="map-panel google-real-panel" title={title}>
+        <MapContainer
+          center={{ lat: 9.91, lng: -83.87 }}
+          zoom={11}
+          scrollWheelZoom={false}
+          className="real-leaflet-map"
+        >
+          <TileLayer
+            attribution="&copy; OpenStreetMap"
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+
+          {sucursalesMapa.map((sucursal) => (
+            <CircleMarker
+              key={sucursal.nombre}
+              center={{ lat: sucursal.lat, lng: sucursal.lng }}
+              radius={sucursal.radius}
+              pathOptions={{
+                color: "#70e000",
+                fillColor: "#70e000",
+                fillOpacity: 0.85,
+              }}
+            >
+              <Popup>
+                <div className="map-popup">
+                  <strong>{sucursal.nombre}</strong>
+                  <span>Venta neta: {formatMoney(sucursal.ventaNeta)}</span>
+                  <span>Porcentaje lista: {sucursal.cumplimiento.toFixed(1)}%</span>
+                  <span>Líneas: {formatNumber(sucursal.lineas)}</span>
+                </div>
+              </Popup>
+            </CircleMarker>
+          ))}
+        </MapContainer>
+
+        {sucursalesMapa.length === 0 ? (
+          <p className="map-empty">No hay sucursales con coordenadas para estos filtros.</p>
+        ) : null}
+      </Panel>
+    );
+  }
+
+
+  function toggleDrill(key: string) {
+    setDrillAbierto((actual) => ({ ...actual, [key]: !actual[key] }));
+  }
+
+  function sumarDetalle(rows: VentaDetalleResumen[]): DrillTotals {
+    return rows.reduce(
+      (acc, row) => ({
+        precio: acc.precio + Number(row.Precio || 0),
+        descuento: acc.descuento + Number(row.Descuento || 0),
+        ventaNeta: acc.ventaNeta + Number(row.VentaNeta || 0),
+        kiloLitro: acc.kiloLitro + Number(row.KiloLitro || 0),
+        cantidad: acc.cantidad + Number(row.CantidadFinal || 0),
+        vendido: acc.vendido + Number(row.Vendido || 0),
+        lineas: acc.lineas + Number(row.LineasDetalle || 0),
+      }),
+      { precio: 0, descuento: 0, ventaNeta: 0, kiloLitro: 0, cantidad: 0, vendido: 0, lineas: 0 }
+    );
+  }
+
+  function unidadResumen(rows: VentaDetalleResumen[]) {
+    const unidades = Array.from(new Set(rows.map((row) => row.UnidadFinal || "UND").filter(Boolean)));
+    return unidades.length === 1 ? unidades[0] : "Mixto";
+  }
+
+  function labelDrill(row: VentaDetalleResumen, field: keyof VentaDetalleResumen) {
+    const value = row[field];
+    if (field === "idFactura") return `Factura ${value || "SIN FACTURA"}`;
+    if (field === "FechaVenta") return formatDateTime(value);
+    return String(value || "SIN DATO");
+  }
+
+  function renderDrillRows(
+    rows: VentaDetalleResumen[],
+    levels: DrillLevel[],
+    depth = 0,
+    parentKey = "root"
+  ): ReactNode {
+    const level = levels[depth];
+    const groups = new Map<string, VentaDetalleResumen[]>();
+
+    rows.forEach((row) => {
+      const label = labelDrill(row, level.field);
+      const current = groups.get(label) || [];
+      current.push(row);
+      groups.set(label, current);
+    });
+
+    return Array.from(groups.entries())
+      .sort((a, b) => sumarDetalle(b[1]).ventaNeta - sumarDetalle(a[1]).ventaNeta)
+      .map(([label, groupRows]) => {
+        const key = `${parentKey}/${String(level.field)}:${label}`;
+        const abierto = !!drillAbierto[key];
+        const leaf = depth >= levels.length - 1;
+        const totals = sumarDetalle(groupRows);
+
+        return (
+          <Fragment key={key}>
+            <tr className={`drill-row depth-${Math.min(depth, 4)}`}>
+              <td className="drill-label-cell">
+                <span style={{ paddingLeft: depth * 18 }} className="drill-label-inner">
+                  {!leaf ? (
+                    <button type="button" className="drill-toggle" onClick={() => toggleDrill(key)}>
+                      {abierto ? "−" : "+"}
+                    </button>
+                  ) : (
+                    <i className="drill-leaf" />
+                  )}
+                  <small>{level.label}</small>
+                  <strong>{label}</strong>
+                </span>
+              </td>
+              <td>{formatMoneyExact(totals.precio)}</td>
+              <td>{formatMoneyExact(totals.descuento)}</td>
+              <td>{formatMoneyExact(totals.ventaNeta)}</td>
+              <td>{formatKiloLitro(totals.kiloLitro)}</td>
+              <td>{formatNumber(totals.cantidad)}</td>
+              <td>{unidadResumen(groupRows)}</td>
+              <td>{formatNumber(totals.lineas)}</td>
+            </tr>
+            {abierto && !leaf ? renderDrillRows(groupRows, levels, depth + 1, key) : null}
+          </Fragment>
+        );
+      });
+  }
+
+  function renderDrillMatrix(title: string, subtitle: string, levels: DrillLevel[]) {
+    const rowsMatrix = ventasDetalleFiltradas;
+    const totals = sumarDetalle(rowsMatrix);
+
+    return (
+      <Panel className="drill-panel" title={title}>
+        <div className="drill-subtitle">{subtitle}</div>
+
+        <div className="drill-table-toolbar">
+          <div className="drill-table-search">
+            <FaSearch />
+            <input
+              value={busquedaDetalle}
+              onChange={(e) => setBusquedaDetalle(e.target.value)}
+              placeholder="Buscar dentro del detalle: código, producto, cliente, factura, proveedor..."
+            />
+            {busquedaDetalle ? (
+              <button type="button" onClick={() => setBusquedaDetalle("")}>
+                Limpiar
+              </button>
+            ) : null}
+          </div>
+          <span>
+            Mostrando {formatNumber(rowsMatrix.length)} de {formatNumber(ventasDetalle.length)} líneas agrupadas
+          </span>
+        </div>
+
+        <div className="detail-table-wrap drill-table-wrap">
+          <table className="detail-table drill-table">
+            <thead>
+              <tr>
+                <th>{levels.map((level) => level.label).join(" > ")}</th>
+                <th>Precio</th>
+                <th>Descuento</th>
+                <th>Venta Neta</th>
+                <th>K-L</th>
+                <th>Cantidad</th>
+                <th>Unidad</th>
+                <th>Líneas</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="drill-total-row">
+                <td>Total filtrado</td>
+                <td>{formatMoneyExact(totals.precio)}</td>
+                <td>{formatMoneyExact(totals.descuento)}</td>
+                <td>{formatMoneyExact(totals.ventaNeta)}</td>
+                <td>{formatKiloLitro(totals.kiloLitro)}</td>
+                <td>{formatNumber(totals.cantidad)}</td>
+                <td>{unidadResumen(rowsMatrix)}</td>
+                <td>{formatNumber(totals.lineas)}</td>
+              </tr>
+              {rowsMatrix.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="empty-detail">
+                    No hay detalle para estos filtros o falta actualizar el backend del server.
+                  </td>
+                </tr>
+              ) : (
+                renderDrillRows(rowsMatrix, levels)
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+    );
+  }
+
+  function renderClientes80Panel() {
+    const totalClientes = clientes80.reduce((acc, cliente) => acc + Number(cliente.VentaNeta || 0), 0);
+    let acumulado = 0;
+
+    return (
+      <Panel className="client-panel" title="80/20 CLIENTES">
+        <table className="summary-table client-8020-table">
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Venta Neta</th>
+              <th>%</th>
+              <th>Acum.</th>
+              <th>Líneas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {clientes80.length === 0 && (
+              <tr><td colSpan={5}>Sin datos de clientes para estos filtros.</td></tr>
+            )}
+            {clientes80.slice(0, 30).map((cliente: Cliente80Resumen) => {
+              const venta = Number(cliente.VentaNeta || 0);
+              const participacion = totalClientes > 0 ? (venta / totalClientes) * 100 : 0;
+              acumulado += participacion;
+
+              return (
+                <tr key={cliente.Cliente}>
+                  <td>{cliente.Cliente}</td>
+                  <td>{formatMoneyExact(venta)}</td>
+                  <td>{participacion.toFixed(1)}%</td>
+                  <td>{acumulado.toFixed(1)}%</td>
+                  <td>{formatNumber(cliente.LineasDetalle || 0)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </Panel>
+    );
+  }
+
+  function renderPresupuestoDetallePanel() {
+    return (
+      <Panel className="budget-detail-panel" title="PRESUPUESTO DETALLADO POR FAMILIA">
+        <div className="detail-table-wrap drill-table-wrap">
+          <table className="detail-table budget-detail-table">
+            <thead>
+              <tr>
+                <th>Familia</th>
+                <th>Presupuesto 2026</th>
+                <th>Real</th>
+                <th>Diferencia</th>
+                <th>Cumpl.</th>
+                <th>Presupuesto K-L</th>
+                <th>K-L Real</th>
+                <th>Líneas</th>
+              </tr>
+            </thead>
+            <tbody>
+              {presupuestoFamilias.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="empty-detail">Sin presupuesto detallado para estos filtros.</td>
+                </tr>
+              )}
+              {presupuestoFamilias.map((row: PresupuestoFamiliaResumen) => (
+                <tr key={row.Familia}>
+                  <td className="detail-product-cell">{row.Familia}</td>
+                  <td>{formatMoneyExact(row.Presupuesto)}</td>
+                  <td>{formatMoneyExact(row.Real)}</td>
+                  <td className={Number(row.Diferencia || 0) >= 0 ? "positive-money" : "negative-money"}>
+                    {formatMoneyExact(row.Diferencia)}
+                  </td>
+                  <td>{Number(row.Cumplimiento || 0).toFixed(1)}%</td>
+                  <td>{formatKiloLitro(Number(row.PresupuestoKiloLitro || 0))}</td>
+                  <td>{formatKiloLitro(Number(row.KiloLitroReal || 0))}</td>
+                  <td>{formatNumber(Number(row.LineasDetalle || 0))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+    );
+  }
 
   function renderVentas() {
     return (
       <section className="section-page">
-        <SectionHeader title="Ventas" subtitle="Seguimiento comercial por mes, familia y proveedor." />
+        <SectionHeader title="Ventas" subtitle="Seguimiento comercial con desglose tipo Power BI: bodega, código, producto, cliente y factura." />
         <div className="section-grid">
+          <div className="section-span-12">
+            {renderDrillMatrix(
+              "VENTAS DETALLADAS",
+              "Abrí los + para bajar de Bodega > Código > Producto > Cliente > Factura, usando los mismos filtros de la izquierda.",
+              [
+                { field: "Bodega", label: "Bodega" },
+                { field: "Codigo", label: "Código" },
+                { field: "Producto", label: "Producto" },
+                { field: "Cliente", label: "Cliente" },
+                { field: "idFactura", label: "Factura" },
+              ]
+            )}
+          </div>
+          <div className="section-span-6">{renderClientes80Panel()}</div>
+          <div className="section-span-6">{renderTopProveedoresPanel("TOP PROVEEDORES EN VENTAS")}</div>
           <div className="section-span-8">{renderMesesPanel("EVOLUCIÓN DE VENTAS Y PRESUPUESTO")}</div>
           <div className="section-span-4">{renderFamiliasPanel("VENTAS POR FAMILIA")}</div>
-          <div className="section-span-6">{renderTopProveedoresPanel("TOP PROVEEDORES EN VENTAS")}</div>
-          <div className="section-span-6">{renderResumenProveedorPanel("DETALLE DE VENTAS POR PROVEEDOR")}</div>
         </div>
+      </section>
+    );
+  }
+
+  function renderDetalle() {
+    const rows = detalle.rows || [];
+    const inicio = detalle.totalRegistros === 0 ? 0 : (detalle.page - 1) * detalle.pageSize + 1;
+    const fin = Math.min(detalle.page * detalle.pageSize, detalle.totalRegistros);
+
+    return (
+      <section className="section-page">
+        <SectionHeader
+          title="Detalle Ultra"
+          subtitle="Vista detalle a detalle: cada línea de venta con filtros, búsqueda y todos los campos crudos de SQL."
+        />
+
+        <div className="detail-kpi-grid">
+          <ConfigCard title="Líneas" value={formatNumber(detalle.totalRegistros)} status="Detalle real" />
+          <ConfigCard title="Venta neta" value={formatMoneyExact(detalle.ventaNeta)} status="Filtrado" />
+          <ConfigCard title="Cantidad" value={formatNumber(detalle.cantidadTotal)} status="Unidades" />
+          <ConfigCard title="K-L" value={formatKiloLitro(detalle.kiloLitro)} status="Kilos / litros" />
+        </div>
+
+        <Panel className="ultra-detail-panel" title="DETALLE LÍNEA POR LÍNEA">
+          <div className="detail-toolbar">
+            <label className="detail-search">
+              <FaSearch />
+              <input
+                value={busquedaDetalle}
+                onChange={(e) => setBusquedaDetalle(e.target.value)}
+                placeholder="Buscar producto, proveedor, familia, sucursal o fecha..."
+              />
+            </label>
+
+            <label>
+              Filas
+              <select
+                value={tamanoDetalle}
+                onChange={(e) => setTamanoDetalle(Number(e.target.value))}
+              >
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={250}>250</option>
+                <option value={500}>500</option>
+              </select>
+            </label>
+
+            <button type="button" onClick={actualizarDetalle} disabled={detalleCargando}>
+              <FaSyncAlt className={detalleCargando ? "spin" : ""} />
+              {detalleCargando ? "Cargando..." : "Actualizar detalle"}
+            </button>
+          </div>
+
+          <div className="detail-range">
+            Mostrando <strong>{inicio}</strong> - <strong>{fin}</strong> de <strong>{formatNumber(detalle.totalRegistros)}</strong> líneas
+          </div>
+
+          <div className="detail-table-wrap">
+            <table className="detail-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Fecha</th>
+                  <th>Sucursal</th>
+                  <th>Proveedor</th>
+                  <th>Familia</th>
+                  <th>Producto</th>
+                  <th>Cantidad</th>
+                  <th>Unidad</th>
+                  <th>Venta neta</th>
+                  <th>Todo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length === 0 && (
+                  <tr>
+                    <td colSpan={10} className="empty-detail">
+                      {detalleCargando ? "Cargando detalle..." : "No hay líneas para estos filtros."}
+                    </td>
+                  </tr>
+                )}
+
+                {rows.map((row) => {
+                  const rowNum = Number(row.RowNum || 0);
+                  const abierto = filaDetalleAbierta === rowNum;
+                  const fecha = getDetalleValue(row, ["DetalleFechaVenta", "FechaVenta"]);
+                  const sucursal = getDetalleValue(row, ["DetalleSucursal", "Sucursal", "Bodega"], "SIN SUCURSAL");
+                  const proveedor = getDetalleValue(row, ["DetalleProveedor", "Proveedor"], "SIN PROVEEDOR");
+                  const familia = getDetalleValue(row, ["DetalleFamilia", "Familia"], "SIN FAMILIA");
+                  const producto = getDetalleValue(row, ["DetalleProducto", "Producto"], "SIN PRODUCTO");
+                  const cantidad = Number(getDetalleValue(row, ["DetalleCantidadFinal", "CantidadFinal"], 0));
+                  const unidad = getDetalleValue(row, ["DetalleUnidadFinal", "UnidadFinal"], "-");
+                  const venta = Number(getDetalleValue(row, ["DetalleVentaNeta", "VentaNeta", "Venta_Neta2"], 0));
+
+                  return (
+                    <Fragment key={`detalle-grupo-${rowNum}`}>
+                      <tr key={`detalle-${rowNum}`}>
+                        <td>{rowNum}</td>
+                        <td>{formatDateTime(fecha)}</td>
+                        <td>{sucursal}</td>
+                        <td>{proveedor}</td>
+                        <td>{familia}</td>
+                        <td className="detail-product-cell">{producto}</td>
+                        <td>{formatNumber(cantidad)}</td>
+                        <td>{unidad}</td>
+                        <td>{formatMoneyExact(venta)}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="row-detail-btn"
+                            onClick={() => setFilaDetalleAbierta(abierto ? null : rowNum)}
+                          >
+                            {abierto ? <FaChevronUp /> : <FaChevronDown />}
+                          </button>
+                        </td>
+                      </tr>
+
+                      {abierto && (
+                        <tr className="raw-detail-row" key={`raw-${rowNum}`}>
+                          <td colSpan={10}>
+                            <div className="raw-grid">
+                              {Object.entries(row)
+                                .filter(([key, value]) => value !== null && value !== undefined && key !== "RowNum")
+                                .map(([key, value]) => (
+                                  <div key={`${rowNum}-${key}`}>
+                                    <span>{key}</span>
+                                    <strong>{String(value)}</strong>
+                                  </div>
+                                ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="detail-pagination">
+            <button
+              type="button"
+              disabled={detalle.page <= 1 || detalleCargando}
+              onClick={() => setPaginaDetalle((page) => Math.max(page - 1, 1))}
+            >
+              Anterior
+            </button>
+            <span>
+              Página <strong>{detalle.page}</strong> de <strong>{Math.max(detalle.totalPaginas, 1)}</strong>
+            </span>
+            <button
+              type="button"
+              disabled={detalle.page >= detalle.totalPaginas || detalleCargando}
+              onClick={() => setPaginaDetalle((page) => page + 1)}
+            >
+              Siguiente
+            </button>
+          </div>
+        </Panel>
       </section>
     );
   }
@@ -524,8 +1222,9 @@ export default function Dashboard({ onLogout }: Props) {
   function renderPresupuesto() {
     return (
       <section className="section-page">
-        <SectionHeader title="Presupuesto" subtitle="Avance contra meta del periodo y brecha pendiente." />
+        <SectionHeader title="Presupuesto" subtitle="Avance contra meta del periodo, con tabla detallada por familia como en Power BI." />
         <div className="section-grid">
+          <div className="section-span-12">{renderPresupuestoDetallePanel()}</div>
           <div className="section-span-5">{renderGaugePanel("AVANCE GENERAL")}</div>
           <div className="section-span-7">{renderMesesPanel("PRESUPUESTO VS REAL")}</div>
           <div className="section-span-6">{renderSucursalesPanel("CUMPLIMIENTO POR SUCURSAL")}</div>
@@ -538,11 +1237,23 @@ export default function Dashboard({ onLogout }: Props) {
   function renderProveedores() {
     return (
       <section className="section-page">
-        <SectionHeader title="Proveedores" subtitle="Ranking, participación y desempeño de proveedores." />
+        <SectionHeader title="Proveedores" subtitle="Ranking y desglose proveedor > familia > producto > cliente > factura." />
         <div className="section-grid">
+          <div className="section-span-12">
+            {renderDrillMatrix(
+              "DETALLE POR PROVEEDOR",
+              "Abrí cada proveedor para llegar hasta producto, cliente y factura.",
+              [
+                { field: "Proveedor", label: "Proveedor" },
+                { field: "Familia", label: "Familia" },
+                { field: "Producto", label: "Producto" },
+                { field: "Cliente", label: "Cliente" },
+                { field: "idFactura", label: "Factura" },
+              ]
+            )}
+          </div>
           <div className="section-span-5">{renderTopProveedoresPanel("RANKING DE PROVEEDORES")}</div>
           <div className="section-span-7">{renderResumenProveedorPanel("RESUMEN DETALLADO")}</div>
-          <div className="section-span-12">{renderFamiliasPanel("FAMILIAS ASOCIADAS A LA VENTA")}</div>
         </div>
       </section>
     );
@@ -551,8 +1262,21 @@ export default function Dashboard({ onLogout }: Props) {
   function renderSucursales() {
     return (
       <section className="section-page">
-        <SectionHeader title="Sucursales" subtitle="Cumplimiento y ventas por punto de operación." />
+        <SectionHeader title="Sucursales" subtitle="Cumplimiento y detalle por sucursal, proveedor, producto, cliente y factura." />
         <div className="section-grid">
+          <div className="section-span-12">
+            {renderDrillMatrix(
+              "DETALLE POR SUCURSAL",
+              "Bajá de sucursal a proveedor, producto, cliente y factura.",
+              [
+                { field: "Bodega", label: "Sucursal" },
+                { field: "Proveedor", label: "Proveedor" },
+                { field: "Producto", label: "Producto" },
+                { field: "Cliente", label: "Cliente" },
+                { field: "idFactura", label: "Factura" },
+              ]
+            )}
+          </div>
           <div className="section-span-5">{renderSucursalesPanel("VENTAS POR SUCURSAL")}</div>
           <div className="section-span-7">{renderMapaPanel("MAPA DE CUMPLIMIENTO")}</div>
           <div className="section-span-12">{renderInsightsPanel("INSIGHTS POR SUCURSAL")}</div>
@@ -566,35 +1290,58 @@ export default function Dashboard({ onLogout }: Props) {
 
   return (
     <section className="section-page">
-      <SectionHeader title="Productos" subtitle="Todos los productos por venta, familia, proveedor y kilo/litro." />
+      <SectionHeader title="Productos" subtitle="Productos con desglose por familia, producto, cliente y factura." />
+      <div className="section-grid">
+        <div className="section-span-12">
+          {renderDrillMatrix(
+            "DETALLE POR PRODUCTO",
+            "Abrí las familias para llegar al producto, cliente y factura.",
+            [
+              { field: "Familia", label: "Familia" },
+              { field: "Producto", label: "Producto" },
+              { field: "Cliente", label: "Cliente" },
+              { field: "idFactura", label: "Factura" },
+            ]
+          )}
+        </div>
 
-      <Panel className="products-panel" title="PRODUCTOS">
-        <table className="summary-table">
-          <thead>
-            <tr>
-              <th>Producto</th>
-              <th>Familia</th>
-              <th>Proveedor</th>
-              <th>Venta Neta</th>
-              <th>K-L</th>
-            </tr>
-          </thead>
-          <tbody>
-            {productos.map((p) => (
-              <tr key={`${p.Producto}-${p.Proveedor}`}>
-                <td>{p.Producto}</td>
-                <td>{p.Familia}</td>
-                <td>{p.Proveedor}</td>
-                <td>{formatMoney(Number(p.VentaNeta || 0))}</td>
-                <td>{formatKiloLitro(Number(p.KiloLitro || 0))}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Panel>
+        <div className="section-span-12">
+          <Panel className="products-panel" title="TOP PRODUCTOS RESUMEN">
+            <table className="summary-table">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th>Familia</th>
+                  <th>Proveedor</th>
+                  <th>Sucursal</th>
+                  <th>Cantidad</th>
+                  <th>Líneas</th>
+                  <th>Venta Neta</th>
+                  <th>K-L</th>
+                </tr>
+              </thead>
+              <tbody>
+                {productos.map((p) => (
+                  <tr key={`${p.Producto}-${p.Proveedor}-${p.Sucursal}`}>
+                    <td>{p.Producto}</td>
+                    <td>{p.Familia}</td>
+                    <td>{p.Proveedor}</td>
+                    <td>{p.Sucursal || "-"}</td>
+                    <td>{formatNumber(Number(p.CantidadTotal || 0))}</td>
+                    <td>{formatNumber(Number(p.LineasDetalle || 0))}</td>
+                    <td>{formatMoney(Number(p.VentaNeta || 0))}</td>
+                    <td>{formatKiloLitro(Number(p.KiloLitro || 0))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Panel>
+        </div>
+      </div>
     </section>
   );
 }
+
 
   function renderAlertas() {
     return (
@@ -733,7 +1480,7 @@ export default function Dashboard({ onLogout }: Props) {
     );
   }
 
-  function renderTopProveedoresPanel(title = "TOP 5 PROVEEDORES") {
+  function renderTopProveedoresPanel(title = "TOP 10 PROVEEDORES") {
     return (
       <Panel className="top-panel" title={title}>
         <div className="top-table">
