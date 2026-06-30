@@ -35,6 +35,11 @@ const usuarios = [
     password: "J0s3M0y4$",
     nombre: "Mejor Elemento",
   },
+  {
+    usuario: "Arivera",
+    password: "031967",
+    nombre: "Gerente General",
+  },
 ];
 
 export default function Login({ onLogin }: Props) {
