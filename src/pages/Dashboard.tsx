@@ -155,7 +155,6 @@ type PivotMetricField =
   | "KiloLitro"
   | "CantidadFinal"
   | "Vendido"
-  | "MargenPorcentaje"
   | "LineasDetalle";
 type PivotAggregation = "sum" | "average" | "count" | "max" | "min";
 type PivotParetoMode = "off" | "show" | "only80";
@@ -240,7 +239,6 @@ const PIVOT_METRICS: PivotMetricDefinition[] = [
   { field: "KiloLitro", label: "Kilos / litros", description: "Volumen vendido.", format: "number", defaultAggregation: "sum" },
   { field: "CantidadFinal", label: "Cantidad", description: "Cantidad final facturada.", format: "number", defaultAggregation: "sum" },
   { field: "Vendido", label: "Vendido", description: "Cantidad base vendida.", format: "number", defaultAggregation: "sum" },
-  { field: "MargenPorcentaje", label: "Margen %", description: "Porcentaje de margen promedio.", format: "percent", defaultAggregation: "average" },
   { field: "LineasDetalle", label: "Líneas", description: "Cantidad de líneas de detalle.", format: "number", defaultAggregation: "sum" },
 ];
 
